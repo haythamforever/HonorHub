@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --integrant-orange: #F7941D;
+  --integrant-cyan: #00B8E6;
+  --integrant-orange-light: #FDB64D;
+  --integrant-cyan-light: #4DD4F7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #F8FAFC;
+  min-height: 100vh;
+  color: #1F2937;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 184, 230, 0.2);
+  color: #0E7490;
+}
+
+/* Focus Styles */
+*:focus-visible {
+  outline: 2px solid #00B8E6;
+  outline-offset: 2px;
+}
+
+/* Input Styles */
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* Loading Spinner */
+.spinner {
+  border: 3px solid rgba(0, 184, 230, 0.15);
+  border-top: 3px solid #00B8E6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Table Styles */
+.table-row-hover:hover {
+  background: rgba(0, 184, 230, 0.03);
+}
+
+/* Card Hover Effect */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+
+/* Integrant Brand Colors Utilities */
+.text-integrant-orange { color: #F7941D; }
+.text-integrant-cyan { color: #00B8E6; }
+.bg-integrant-orange { background-color: #F7941D; }
+.bg-integrant-cyan { background-color: #00B8E6; }
+.border-integrant-orange { border-color: #F7941D; }
+.border-integrant-cyan { border-color: #00B8E6; }
+
+/* Hover states */
+.hover\:bg-integrant-orange:hover { background-color: #E8850A; }
+.hover\:bg-integrant-cyan:hover { background-color: #0099C2; }

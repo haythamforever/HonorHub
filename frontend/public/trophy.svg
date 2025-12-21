@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Trophy Cup - Orange -->
+  <path d="M30 20 L70 20 L70 25 C70 45 60 55 50 60 C40 55 30 45 30 25 Z" 
+        fill="#F7941D"/>
+  
+  <!-- Left Handle - Orange -->
+  <path d="M30 25 Q20 25 20 35 Q20 45 30 45" 
+        stroke="#F7941D" 
+        stroke-width="5" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Right Handle - Cyan -->
+  <path d="M70 25 Q80 25 80 35 Q80 45 70 45" 
+        stroke="#00B8E6" 
+        stroke-width="5" 
+        fill="none" 
+        stroke-linecap="round"/>
+  
+  <!-- Trophy Stem -->
+  <rect x="45" y="60" width="10" height="12" fill="#F7941D" rx="2"/>
+  
+  <!-- Trophy Base -->
+  <rect x="35" y="72" width="30" height="6" rx="2" fill="#00B8E6"/>
+  <rect x="32" y="78" width="36" height="8" rx="3" fill="#F7941D"/>
+  
+  <!-- Star decoration -->
+  <polygon points="50,28 52,34 58,34 53,38 55,44 50,40 45,44 47,38 42,34 48,34" 
+           fill="white"/>
+  
+  <!-- Shine effect -->
+  <ellipse cx="42" cy="32" rx="3" ry="6" fill="white" opacity="0.4" transform="rotate(-20 42 32)"/>
+</svg>

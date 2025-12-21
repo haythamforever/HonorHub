@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/data/*
+!backend/data/.gitkeep
+
+# Uploads (user-generated content)
+backend/uploads/certificates/
+backend/uploads/logos/
+backend/uploads/signatures/
+!backend/uploads/.gitkeep
+!backend/uploads/certificates/.gitkeep
+!backend/uploads/logos/.gitkeep
+!backend/uploads/signatures/.gitkeep
+
+# Build outputs
+frontend/dist/
+frontend/build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
