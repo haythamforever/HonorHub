@@ -1,10 +1,10 @@
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
-const { db } = require('../database/init');
+const { getAll } = require('../database/init');
 
-function getEmailSettings() {
-  const settings = db.prepare('SELECT key, value FROM settings').all();
+async function getEmailSettings() {
+  const settings = await getAll('SELECT key, value FROM settings');
   const settingsObj = {};
   settings.forEach(s => {
     settingsObj[s.key] = s.value;
@@ -12,8 +12,8 @@ function getEmailSettings() {
   return settingsObj;
 }
 
-function createTransporter() {
-  const settings = getEmailSettings();
+async function createTransporter() {
+  const settings = await getEmailSettings();
   
   if (!settings.smtp_host || !settings.smtp_user) {
     throw new Error('Email settings not configured');
@@ -33,8 +33,8 @@ function createTransporter() {
 async function sendCertificateEmail(options) {
   const { employee, tier, sender, customMessage, pdfPath } = options;
   
-  const settings = getEmailSettings();
-  const transporter = createTransporter();
+  const settings = await getEmailSettings();
+  const transporter = await createTransporter();
   
   // Replace placeholders in subject and body templates
   let subject = settings.email_subject_template || 'Congratulations! You have been recognized as {tier}';
@@ -82,8 +82,8 @@ async function sendCertificateEmail(options) {
 }
 
 async function sendTestEmail(testEmail) {
-  const settings = getEmailSettings();
-  const transporter = createTransporter();
+  const settings = await getEmailSettings();
+  const transporter = await createTransporter();
   
   const mailOptions = {
     from: `"${settings.smtp_from_name || 'HonorHub'}" <${settings.smtp_from_email || settings.smtp_user}>`,
@@ -107,4 +107,3 @@ async function sendTestEmail(testEmail) {
 }
 
 module.exports = { sendCertificateEmail, sendTestEmail };
-

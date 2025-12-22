@@ -1,32 +1,42 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const { db } = require('../database/init');
+const { getOne, getAll, run } = require('../database/init');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Get all users (admin only)
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
-  const users = db.prepare(`
-    SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title, created_at 
-    FROM users ORDER BY created_at DESC
-  `).all();
-  res.json(users);
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const users = await getAll(`
+      SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title, created_at 
+      FROM users ORDER BY created_at DESC
+    `);
+    res.json(users);
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
 });
 
 // Get user by ID
-router.get('/:id', authenticateToken, (req, res) => {
-  const user = db.prepare(`
-    SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title, created_at 
-    FROM users WHERE id = ?
-  `).get(req.params.id);
-  
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const user = await getOne(`
+      SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title, created_at 
+      FROM users WHERE id = $1
+    `, [req.params.id]);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
-  
-  res.json(user);
 });
 
 // Create user (admin only)
@@ -34,7 +44,7 @@ router.post('/', authenticateToken, requireAdmin, [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('name').notEmpty().trim()
-], (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -42,21 +52,21 @@ router.post('/', authenticateToken, requireAdmin, [
 
   const { email, password, name, role, department, signature_name, signature_title } = req.body;
   
-  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-  if (existingUser) {
-    return res.status(400).json({ error: 'Email already exists' });
-  }
-
-  const hashedPassword = bcrypt.hashSync(password, 10);
-  
   try {
-    const result = db.prepare(`
+    const existingUser = await getOne('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    const result = await run(`
       INSERT INTO users (email, password, name, role, department, signature_name, signature_title) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(email, hashedPassword, name, role || 'user', department || null, signature_name || null, signature_title || null);
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
+    `, [email, hashedPassword, name, role || 'user', department || null, signature_name || null, signature_title || null]);
     
     res.status(201).json({
-      id: result.lastInsertRowid,
+      id: result.rows[0].id,
       email,
       name,
       role: role || 'user',
@@ -65,12 +75,13 @@ router.post('/', authenticateToken, requireAdmin, [
       signature_title
     });
   } catch (error) {
+    console.error('Create user error:', error);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
 
 // Update user
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   const userId = parseInt(req.params.id);
   
   // Users can only update their own profile unless admin
@@ -82,39 +93,40 @@ router.put('/:id', authenticateToken, (req, res) => {
   
   const updates = [];
   const values = [];
+  let paramIndex = 1;
   
   if (name) {
-    updates.push('name = ?');
+    updates.push(`name = $${paramIndex++}`);
     values.push(name);
   }
   if (department !== undefined) {
-    updates.push('department = ?');
+    updates.push(`department = $${paramIndex++}`);
     values.push(department);
   }
   if (logo_path !== undefined) {
-    updates.push('logo_path = ?');
+    updates.push(`logo_path = $${paramIndex++}`);
     values.push(logo_path);
   }
   if (signature_path !== undefined) {
-    updates.push('signature_path = ?');
+    updates.push(`signature_path = $${paramIndex++}`);
     values.push(signature_path);
   }
   if (signature_name !== undefined) {
-    updates.push('signature_name = ?');
+    updates.push(`signature_name = $${paramIndex++}`);
     values.push(signature_name);
   }
   if (signature_title !== undefined) {
-    updates.push('signature_title = ?');
+    updates.push(`signature_title = $${paramIndex++}`);
     values.push(signature_title);
   }
   // Only admin can change roles
   if (role !== undefined && req.user.role === 'admin') {
-    updates.push('role = ?');
+    updates.push(`role = $${paramIndex++}`);
     values.push(role);
   }
   // Update password if provided
   if (password) {
-    updates.push('password = ?');
+    updates.push(`password = $${paramIndex++}`);
     values.push(bcrypt.hashSync(password, 10));
   }
   
@@ -125,32 +137,41 @@ router.put('/:id', authenticateToken, (req, res) => {
   updates.push('updated_at = CURRENT_TIMESTAMP');
   values.push(userId);
   
-  db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  
-  const user = db.prepare(`
-    SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title 
-    FROM users WHERE id = ?
-  `).get(userId);
-  
-  res.json(user);
+  try {
+    await run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`, values);
+    
+    const user = await getOne(`
+      SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title 
+      FROM users WHERE id = $1
+    `, [userId]);
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
 });
 
 // Delete user (admin only)
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const userId = parseInt(req.params.id);
   
   if (userId === req.user.id) {
     return res.status(400).json({ error: 'Cannot delete your own account' });
   }
   
-  const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-  
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'User not found' });
+  try {
+    const result = await run('DELETE FROM users WHERE id = $1', [userId]);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
-  
-  res.json({ message: 'User deleted successfully' });
 });
 
 module.exports = router;
-

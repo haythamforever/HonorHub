@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
-const { db } = require('../database/init');
+const { getOne } = require('../database/init');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'honorhub-dev-secret-key-2024';
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -13,7 +13,10 @@ function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title FROM users WHERE id = ?').get(decoded.userId);
+    const user = await getOne(
+      'SELECT id, email, name, role, department, logo_path, signature_path, signature_name, signature_title FROM users WHERE id = $1',
+      [decoded.userId]
+    );
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -34,4 +37,3 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = { authenticateToken, requireAdmin, JWT_SECRET };
-

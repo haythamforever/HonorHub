@@ -1,103 +1,126 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { db } = require('../database/init');
+const { getOne, getAll, run, pool } = require('../database/init');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Get all employees (filtered by user assignments for non-admin users)
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { search, department, account, all } = req.query;
   const isAdmin = req.user.role === 'admin';
   
   let query = '';
   const params = [];
+  let paramIndex = 1;
   
-  // Admins can see all employees, regular users only see their assigned employees
-  // Unless 'all' is requested by admin for assignment purposes
-  if (isAdmin && all === 'true') {
-    query = 'SELECT * FROM employees WHERE 1=1';
-  } else if (isAdmin) {
-    query = 'SELECT * FROM employees WHERE 1=1';
-  } else {
-    // Non-admin: only see assigned employees
-    query = `
-      SELECT e.* FROM employees e
-      INNER JOIN user_employees ue ON e.id = ue.employee_id
-      WHERE ue.user_id = ?
-    `;
-    params.push(req.user.id);
+  try {
+    // Admins can see all employees, regular users only see their assigned employees
+    if (isAdmin) {
+      query = 'SELECT * FROM employees WHERE 1=1';
+    } else {
+      // Non-admin: only see assigned employees
+      query = `
+        SELECT e.* FROM employees e
+        INNER JOIN user_employees ue ON e.id = ue.employee_id
+        WHERE ue.user_id = $${paramIndex++}
+      `;
+      params.push(req.user.id);
+    }
+    
+    if (search) {
+      if (isAdmin) {
+        query += ` AND (name ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR employee_id ILIKE $${paramIndex})`;
+      } else {
+        query += ` AND (e.name ILIKE $${paramIndex} OR e.email ILIKE $${paramIndex} OR e.employee_id ILIKE $${paramIndex})`;
+      }
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    if (department) {
+      if (isAdmin) {
+        query += ` AND department = $${paramIndex++}`;
+      } else {
+        query += ` AND e.department = $${paramIndex++}`;
+      }
+      params.push(department);
+    }
+    
+    if (account) {
+      if (isAdmin) {
+        query += ` AND account = $${paramIndex++}`;
+      } else {
+        query += ` AND e.account = $${paramIndex++}`;
+      }
+      params.push(account);
+    }
+    
+    query += isAdmin ? ' ORDER BY name ASC' : ' ORDER BY e.name ASC';
+    
+    const employees = await getAll(query, params);
+    res.json(employees);
+  } catch (error) {
+    console.error('Get employees error:', error);
+    res.status(500).json({ error: 'Failed to fetch employees' });
   }
-  
-  if (search) {
-    query += ' AND (e.name LIKE ? OR e.email LIKE ? OR e.employee_id LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
-  }
-  
-  if (department) {
-    query += ' AND e.department = ?';
-    params.push(department);
-  }
-  
-  if (account) {
-    query += ' AND e.account = ?';
-    params.push(account);
-  }
-  
-  // Fix column reference for non-admin queries
-  if (!isAdmin) {
-    query = query.replace(/AND \(e\./g, 'AND (e.');
-  } else {
-    // For admin queries without join, use direct column names
-    query = query.replace(/e\./g, '');
-  }
-  
-  query += ' ORDER BY name ASC';
-  
-  const employees = db.prepare(query).all(...params);
-  res.json(employees);
 });
 
 // Get unique accounts
-router.get('/meta/accounts', authenticateToken, (req, res) => {
-  const accounts = db.prepare('SELECT DISTINCT account FROM employees WHERE account IS NOT NULL ORDER BY account').all();
-  res.json(accounts.map(a => a.account));
+router.get('/meta/accounts', authenticateToken, async (req, res) => {
+  try {
+    const accounts = await getAll('SELECT DISTINCT account FROM employees WHERE account IS NOT NULL ORDER BY account');
+    res.json(accounts.map(a => a.account));
+  } catch (error) {
+    console.error('Get accounts error:', error);
+    res.status(500).json({ error: 'Failed to fetch accounts' });
+  }
 });
 
 // Get unique departments
-router.get('/meta/departments', authenticateToken, (req, res) => {
-  const departments = db.prepare('SELECT DISTINCT department FROM employees WHERE department IS NOT NULL ORDER BY department').all();
-  res.json(departments.map(d => d.department));
+router.get('/meta/departments', authenticateToken, async (req, res) => {
+  try {
+    const departments = await getAll('SELECT DISTINCT department FROM employees WHERE department IS NOT NULL ORDER BY department');
+    res.json(departments.map(d => d.department));
+  } catch (error) {
+    console.error('Get departments error:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
 });
 
 // Get employee by ID
-router.get('/:id', authenticateToken, (req, res) => {
-  const employee = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.params.id);
-  
-  if (!employee) {
-    return res.status(404).json({ error: 'Employee not found' });
-  }
-  
-  // Check access for non-admin users
-  if (req.user.role !== 'admin') {
-    const hasAccess = db.prepare(
-      'SELECT 1 FROM user_employees WHERE user_id = ? AND employee_id = ?'
-    ).get(req.user.id, req.params.id);
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const employee = await getOne('SELECT * FROM employees WHERE id = $1', [req.params.id]);
     
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to this employee' });
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
     }
+    
+    // Check access for non-admin users
+    if (req.user.role !== 'admin') {
+      const hasAccess = await getOne(
+        'SELECT 1 FROM user_employees WHERE user_id = $1 AND employee_id = $2',
+        [req.user.id, req.params.id]
+      );
+      
+      if (!hasAccess) {
+        return res.status(403).json({ error: 'Access denied to this employee' });
+      }
+    }
+    
+    res.json(employee);
+  } catch (error) {
+    console.error('Get employee error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee' });
   }
-  
-  res.json(employee);
 });
 
 // Create employee (admin only)
 router.post('/', authenticateToken, requireAdmin, [
   body('email').isEmail().normalizeEmail(),
   body('name').notEmpty().trim()
-], (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -106,10 +129,10 @@ router.post('/', authenticateToken, requireAdmin, [
   const { employee_id, email, name, department, position, manager_name, account, employee_type } = req.body;
   
   try {
-    const result = db.prepare(`
+    const result = await run(`
       INSERT INTO employees (employee_id, email, name, department, position, manager_name, account, employee_type) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
+    `, [
       employee_id || null, 
       email, 
       name, 
@@ -118,10 +141,10 @@ router.post('/', authenticateToken, requireAdmin, [
       manager_name || null,
       account || null,
       employee_type || null
-    );
+    ]);
     
     res.status(201).json({
-      id: result.lastInsertRowid,
+      id: result.rows[0].id,
       employee_id,
       email,
       name,
@@ -132,40 +155,29 @@ router.post('/', authenticateToken, requireAdmin, [
       employee_type
     });
   } catch (error) {
-    if (error.message.includes('UNIQUE')) {
+    if (error.code === '23505') { // Unique violation
       return res.status(400).json({ error: 'Employee ID already exists' });
     }
+    console.error('Create employee error:', error);
     res.status(500).json({ error: 'Failed to create employee' });
   }
 });
 
 // Bulk create/update employees from CSV (admin only)
-// CSV format: Displayname, mail, Manager, Account, Description, employeeType, Department
-router.post('/bulk', authenticateToken, requireAdmin, (req, res) => {
+router.post('/bulk', authenticateToken, requireAdmin, async (req, res) => {
   const { employees } = req.body;
   
   if (!Array.isArray(employees) || employees.length === 0) {
     return res.status(400).json({ error: 'Invalid employees data' });
   }
 
-  const insertStmt = db.prepare(`
-    INSERT INTO employees (employee_id, email, name, department, position, manager_name, account, employee_type) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(employee_id) DO UPDATE SET
-      email = excluded.email,
-      name = excluded.name,
-      department = excluded.department,
-      position = excluded.position,
-      manager_name = excluded.manager_name,
-      account = excluded.account,
-      employee_type = excluded.employee_type,
-      updated_at = CURRENT_TIMESTAMP
-  `);
-
   const results = { success: 0, failed: 0, errors: [] };
+  const client = await pool.connect();
 
-  const insertMany = db.transaction((emps) => {
-    for (const emp of emps) {
+  try {
+    await client.query('BEGIN');
+    
+    for (const emp of employees) {
       try {
         // Map CSV columns to database fields
         const name = emp.Displayname || emp.displayname || emp.name;
@@ -185,25 +197,35 @@ router.post('/bulk', authenticateToken, requireAdmin, (req, res) => {
         // Use email as employee_id if not provided
         const employeeId = emp.employee_id || email;
         
-        insertStmt.run(
-          employeeId,
-          email,
-          name,
-          department || null,
-          position || null,
-          manager || null,
-          account || null,
-          employeeType || null
-        );
+        await client.query(`
+          INSERT INTO employees (employee_id, email, name, department, position, manager_name, account, employee_type) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT(employee_id) DO UPDATE SET
+            email = EXCLUDED.email,
+            name = EXCLUDED.name,
+            department = EXCLUDED.department,
+            position = EXCLUDED.position,
+            manager_name = EXCLUDED.manager_name,
+            account = EXCLUDED.account,
+            employee_type = EXCLUDED.employee_type,
+            updated_at = CURRENT_TIMESTAMP
+        `, [employeeId, email, name, department || null, position || null, manager || null, account || null, employeeType || null]);
+        
         results.success++;
       } catch (error) {
         results.failed++;
         results.errors.push({ employee: emp, error: error.message });
       }
     }
-  });
-
-  insertMany(employees);
+    
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Bulk import error:', error);
+    return res.status(500).json({ error: 'Failed to import employees' });
+  } finally {
+    client.release();
+  }
   
   res.json({
     message: `Imported ${results.success} employees`,
@@ -212,42 +234,43 @@ router.post('/bulk', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Update employee (admin only)
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { employee_id, email, name, department, position, manager_name, account, employee_type } = req.body;
   
   const updates = [];
   const values = [];
+  let paramIndex = 1;
   
   if (employee_id !== undefined) {
-    updates.push('employee_id = ?');
+    updates.push(`employee_id = $${paramIndex++}`);
     values.push(employee_id);
   }
   if (email) {
-    updates.push('email = ?');
+    updates.push(`email = $${paramIndex++}`);
     values.push(email);
   }
   if (name) {
-    updates.push('name = ?');
+    updates.push(`name = $${paramIndex++}`);
     values.push(name);
   }
   if (department !== undefined) {
-    updates.push('department = ?');
+    updates.push(`department = $${paramIndex++}`);
     values.push(department);
   }
   if (position !== undefined) {
-    updates.push('position = ?');
+    updates.push(`position = $${paramIndex++}`);
     values.push(position);
   }
   if (manager_name !== undefined) {
-    updates.push('manager_name = ?');
+    updates.push(`manager_name = $${paramIndex++}`);
     values.push(manager_name);
   }
   if (account !== undefined) {
-    updates.push('account = ?');
+    updates.push(`account = $${paramIndex++}`);
     values.push(account);
   }
   if (employee_type !== undefined) {
-    updates.push('employee_type = ?');
+    updates.push(`employee_type = $${paramIndex++}`);
     values.push(employee_type);
   }
   
@@ -259,26 +282,32 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   values.push(req.params.id);
   
   try {
-    db.prepare(`UPDATE employees SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-    const employee = db.prepare('SELECT * FROM employees WHERE id = ?').get(req.params.id);
+    await run(`UPDATE employees SET ${updates.join(', ')} WHERE id = $${paramIndex}`, values);
+    const employee = await getOne('SELECT * FROM employees WHERE id = $1', [req.params.id]);
     res.json(employee);
   } catch (error) {
-    if (error.message.includes('UNIQUE')) {
+    if (error.code === '23505') {
       return res.status(400).json({ error: 'Employee ID already exists' });
     }
+    console.error('Update employee error:', error);
     res.status(500).json({ error: 'Failed to update employee' });
   }
 });
 
 // Delete employee (admin only)
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
-  const result = db.prepare('DELETE FROM employees WHERE id = ?').run(req.params.id);
-  
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'Employee not found' });
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await run('DELETE FROM employees WHERE id = $1', [req.params.id]);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    res.json({ message: 'Employee deleted successfully' });
+  } catch (error) {
+    console.error('Delete employee error:', error);
+    res.status(500).json({ error: 'Failed to delete employee' });
   }
-  
-  res.json({ message: 'Employee deleted successfully' });
 });
 
 // ============================================
@@ -286,20 +315,25 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
 // ============================================
 
 // Get all employees assigned to a specific user
-router.get('/assignments/user/:userId', authenticateToken, requireAdmin, (req, res) => {
-  const employees = db.prepare(`
-    SELECT e.*, ue.assigned_at 
-    FROM employees e
-    INNER JOIN user_employees ue ON e.id = ue.employee_id
-    WHERE ue.user_id = ?
-    ORDER BY e.name ASC
-  `).all(req.params.userId);
-  
-  res.json(employees);
+router.get('/assignments/user/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const employees = await getAll(`
+      SELECT e.*, ue.assigned_at 
+      FROM employees e
+      INNER JOIN user_employees ue ON e.id = ue.employee_id
+      WHERE ue.user_id = $1
+      ORDER BY e.name ASC
+    `, [req.params.userId]);
+    
+    res.json(employees);
+  } catch (error) {
+    console.error('Get assignments error:', error);
+    res.status(500).json({ error: 'Failed to fetch assignments' });
+  }
 });
 
 // Assign employees to a user
-router.post('/assignments/user/:userId', authenticateToken, requireAdmin, (req, res) => {
+router.post('/assignments/user/:userId', authenticateToken, requireAdmin, async (req, res) => {
   const { employee_ids } = req.body;
   const userId = parseInt(req.params.userId);
   
@@ -307,27 +341,23 @@ router.post('/assignments/user/:userId', authenticateToken, requireAdmin, (req, 
     return res.status(400).json({ error: 'employee_ids must be an array' });
   }
   
-  const insertStmt = db.prepare(`
-    INSERT OR IGNORE INTO user_employees (user_id, employee_id, assigned_by)
-    VALUES (?, ?, ?)
-  `);
-  
   const results = { assigned: 0, errors: [] };
   
-  const assignMany = db.transaction((ids) => {
-    for (const empId of ids) {
-      try {
-        const result = insertStmt.run(userId, empId, req.user.id);
-        if (result.changes > 0) {
-          results.assigned++;
-        }
-      } catch (error) {
-        results.errors.push({ employee_id: empId, error: error.message });
+  for (const empId of employee_ids) {
+    try {
+      const result = await run(`
+        INSERT INTO user_employees (user_id, employee_id, assigned_by)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, employee_id) DO NOTHING
+      `, [userId, empId, req.user.id]);
+      
+      if (result.rowCount > 0) {
+        results.assigned++;
       }
+    } catch (error) {
+      results.errors.push({ employee_id: empId, error: error.message });
     }
-  });
-  
-  assignMany(employee_ids);
+  }
   
   res.json({
     message: `Assigned ${results.assigned} employees to user`,
@@ -336,7 +366,7 @@ router.post('/assignments/user/:userId', authenticateToken, requireAdmin, (req, 
 });
 
 // Remove employee assignments from a user
-router.delete('/assignments/user/:userId', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/assignments/user/:userId', authenticateToken, requireAdmin, async (req, res) => {
   const { employee_ids } = req.body;
   const userId = parseInt(req.params.userId);
   
@@ -344,20 +374,12 @@ router.delete('/assignments/user/:userId', authenticateToken, requireAdmin, (req
     return res.status(400).json({ error: 'employee_ids must be an array' });
   }
   
-  const deleteStmt = db.prepare(`
-    DELETE FROM user_employees WHERE user_id = ? AND employee_id = ?
-  `);
-  
   let removed = 0;
   
-  const removeMany = db.transaction((ids) => {
-    for (const empId of ids) {
-      const result = deleteStmt.run(userId, empId);
-      removed += result.changes;
-    }
-  });
-  
-  removeMany(employee_ids);
+  for (const empId of employee_ids) {
+    const result = await run('DELETE FROM user_employees WHERE user_id = $1 AND employee_id = $2', [userId, empId]);
+    removed += result.rowCount;
+  }
   
   res.json({
     message: `Removed ${removed} employee assignments`,
@@ -366,7 +388,7 @@ router.delete('/assignments/user/:userId', authenticateToken, requireAdmin, (req
 });
 
 // Replace all employee assignments for a user
-router.put('/assignments/user/:userId', authenticateToken, requireAdmin, (req, res) => {
+router.put('/assignments/user/:userId', authenticateToken, requireAdmin, async (req, res) => {
   const { employee_ids } = req.body;
   const userId = parseInt(req.params.userId);
   
@@ -374,34 +396,39 @@ router.put('/assignments/user/:userId', authenticateToken, requireAdmin, (req, r
     return res.status(400).json({ error: 'employee_ids must be an array' });
   }
   
-  const replaceAssignments = db.transaction(() => {
-    // Remove all existing assignments
-    db.prepare('DELETE FROM user_employees WHERE user_id = ?').run(userId);
-    
-    // Add new assignments
-    const insertStmt = db.prepare(`
-      INSERT INTO user_employees (user_id, employee_id, assigned_by)
-      VALUES (?, ?, ?)
-    `);
-    
-    for (const empId of employee_ids) {
-      insertStmt.run(userId, empId, req.user.id);
-    }
-  });
+  const client = await pool.connect();
   
   try {
-    replaceAssignments();
+    await client.query('BEGIN');
+    
+    // Remove all existing assignments
+    await client.query('DELETE FROM user_employees WHERE user_id = $1', [userId]);
+    
+    // Add new assignments
+    for (const empId of employee_ids) {
+      await client.query(`
+        INSERT INTO user_employees (user_id, employee_id, assigned_by)
+        VALUES ($1, $2, $3)
+      `, [userId, empId, req.user.id]);
+    }
+    
+    await client.query('COMMIT');
+    
     res.json({
       message: `Assigned ${employee_ids.length} employees to user`,
       count: employee_ids.length
     });
   } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update assignments error:', error);
     res.status(500).json({ error: 'Failed to update assignments' });
+  } finally {
+    client.release();
   }
 });
 
 // Bulk assign employees by account to a user
-router.post('/assignments/user/:userId/by-account', authenticateToken, requireAdmin, (req, res) => {
+router.post('/assignments/user/:userId/by-account', authenticateToken, requireAdmin, async (req, res) => {
   const { accounts } = req.body;
   const userId = parseInt(req.params.userId);
   
@@ -409,32 +436,35 @@ router.post('/assignments/user/:userId/by-account', authenticateToken, requireAd
     return res.status(400).json({ error: 'accounts must be an array' });
   }
   
-  const placeholders = accounts.map(() => '?').join(',');
-  const employees = db.prepare(`
-    SELECT id FROM employees WHERE account IN (${placeholders})
-  `).all(...accounts);
-  
-  const insertStmt = db.prepare(`
-    INSERT OR IGNORE INTO user_employees (user_id, employee_id, assigned_by)
-    VALUES (?, ?, ?)
-  `);
-  
-  let assigned = 0;
-  
-  const assignMany = db.transaction(() => {
+  try {
+    const placeholders = accounts.map((_, i) => `$${i + 1}`).join(',');
+    const employees = await getAll(`SELECT id FROM employees WHERE account IN (${placeholders})`, accounts);
+    
+    let assigned = 0;
+    
     for (const emp of employees) {
-      const result = insertStmt.run(userId, emp.id, req.user.id);
-      assigned += result.changes;
+      try {
+        const result = await run(`
+          INSERT INTO user_employees (user_id, employee_id, assigned_by)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (user_id, employee_id) DO NOTHING
+        `, [userId, emp.id, req.user.id]);
+        
+        assigned += result.rowCount;
+      } catch (error) {
+        // Ignore individual errors
+      }
     }
-  });
-  
-  assignMany();
-  
-  res.json({
-    message: `Assigned ${assigned} employees from accounts: ${accounts.join(', ')}`,
-    assigned,
-    total_employees: employees.length
-  });
+    
+    res.json({
+      message: `Assigned ${assigned} employees from accounts: ${accounts.join(', ')}`,
+      assigned,
+      total_employees: employees.length
+    });
+  } catch (error) {
+    console.error('Assign by account error:', error);
+    res.status(500).json({ error: 'Failed to assign by account' });
+  }
 });
 
 module.exports = router;
