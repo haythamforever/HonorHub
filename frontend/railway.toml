@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [build.nixpacks]
-installCmds = ["npm install"]
+installCmds = ["rm -rf node_modules", "npm install --legacy-peer-deps"]
 buildCmds = ["npm run build"]
 
 [deploy]
