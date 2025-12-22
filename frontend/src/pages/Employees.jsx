@@ -14,11 +14,14 @@ import {
   Download,
   Check,
   FileSpreadsheet,
-  Filter
+  Filter,
+  CheckSquare,
+  Square,
+  X
 } from 'lucide-react'
 import { employeesAPI, uploadAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
-import { PageHeader, Card, Button, Input, Modal, EmptyState, Badge, Spinner } from '../components/UI'
+import { PageHeader, Card, Button, Input, Modal, EmptyState, Badge, Spinner, Pagination } from '../components/UI'
 import toast from 'react-hot-toast'
 
 export default function Employees() {
@@ -28,6 +31,9 @@ export default function Employees() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState(null)
   const [importedData, setImportedData] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'admin'
   
@@ -42,6 +48,20 @@ export default function Employees() {
     queryKey: ['accounts'],
     queryFn: () => employeesAPI.getAccounts().then(r => r.data),
   })
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+    setSelectedIds([])
+  }, [search, filterAccount])
+
+  // Paginate employees
+  const totalItems = employees?.length || 0
+  const totalPages = Math.ceil(totalItems / pageSize)
+  const paginatedEmployees = employees?.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  )
 
   const createMutation = useMutation({
     mutationFn: employeesAPI.create,
@@ -108,6 +128,54 @@ export default function Employees() {
     a.click()
   }
 
+  // Multi-select handlers
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) 
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === paginatedEmployees?.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(paginatedEmployees?.map(e => e.id) || [])
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} employees?`)) {
+      return
+    }
+    
+    let deleted = 0
+    for (const id of selectedIds) {
+      try {
+        await employeesAPI.delete(id)
+        deleted++
+      } catch (error) {
+        console.error('Failed to delete employee:', id)
+      }
+    }
+    
+    queryClient.invalidateQueries(['employees'])
+    setSelectedIds([])
+    toast.success(`Deleted ${deleted} employees`)
+  }
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+    setSelectedIds([])
+  }
+
+  const handlePageSizeChange = (size) => {
+    setPageSize(size)
+    setCurrentPage(1)
+    setSelectedIds([])
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -157,6 +225,40 @@ export default function Employees() {
         </div>
       </Card>
 
+      {/* Bulk Actions Bar */}
+      {isAdmin && selectedIds.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-[#F7941D] text-white rounded-xl p-4 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <CheckSquare className="w-5 h-5" />
+            <span className="font-medium">{selectedIds.length} employee{selectedIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+              className="!bg-white/20 !text-white hover:!bg-white/30 !border-0"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleBulkDelete}
+              className="!bg-rose-500 !text-white hover:!bg-rose-600 !border-0"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Employees List */}
       <Card className="overflow-hidden">
         {isLoading ? (
@@ -178,94 +280,141 @@ export default function Employees() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Employee</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Account</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Department</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Position</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Manager</th>
-                  {isAdmin && (
-                    <th className="text-right py-4 px-6 text-sm font-medium text-gray-500">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {employees?.map((employee, index) => (
-                  <motion.tr
-                    key={employee.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    className="border-b border-gray-50 table-row-hover"
-                  >
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#00B8E6] flex items-center justify-center text-white font-medium">
-                          {employee.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800">{employee.name}</p>
-                          <p className="text-sm text-gray-500 flex items-center gap-1">
-                            <Mail className="w-3 h-3" />
-                            {employee.email}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      {employee.account ? (
-                        <Badge color="cyan">{employee.account}</Badge>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      {employee.department ? (
-                        <span className="text-gray-600">{employee.department}</span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      {employee.position ? (
-                        <span className="text-gray-600 text-sm">{employee.position}</span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="text-gray-500 text-sm">{employee.manager_name || '-'}</span>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100">
                     {isAdmin && (
+                      <th className="py-4 px-4 w-12">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="p-1 rounded hover:bg-gray-100 transition-colors"
+                        >
+                          {selectedIds.length === paginatedEmployees?.length && paginatedEmployees?.length > 0 ? (
+                            <CheckSquare className="w-5 h-5 text-[#F7941D]" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-400" />
+                          )}
+                        </button>
+                      </th>
+                    )}
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Employee</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Account</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Department</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Position</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-gray-500">Manager</th>
+                    {isAdmin && (
+                      <th className="text-right py-4 px-6 text-sm font-medium text-gray-500">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedEmployees?.map((employee, index) => (
+                    <motion.tr
+                      key={employee.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.02 }}
+                      className={`border-b border-gray-50 table-row-hover ${
+                        selectedIds.includes(employee.id) ? 'bg-orange-50' : ''
+                      }`}
+                    >
+                      {isAdmin && (
+                        <td className="py-4 px-4">
+                          <button
+                            onClick={() => toggleSelect(employee.id)}
+                            className="p-1 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            {selectedIds.includes(employee.id) ? (
+                              <CheckSquare className="w-5 h-5 text-[#F7941D]" />
+                            ) : (
+                              <Square className="w-5 h-5 text-gray-400" />
+                            )}
+                          </button>
+                        </td>
+                      )}
                       <td className="py-4 px-6">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setEditingEmployee(employee)}
-                            className="p-2 rounded-lg hover:bg-orange-50 text-gray-500 hover:text-[#F7941D] transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this employee?')) {
-                                deleteMutation.mutate(employee.id)
-                              }
-                            }}
-                            className="p-2 rounded-lg hover:bg-rose-50 text-gray-500 hover:text-rose-500 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#00B8E6] flex items-center justify-center text-white font-medium">
+                            {employee.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800">{employee.name}</p>
+                            <p className="text-sm text-gray-500 flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {employee.email}
+                            </p>
+                          </div>
                         </div>
                       </td>
-                    )}
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <td className="py-4 px-6">
+                        {employee.account ? (
+                          <Badge color="cyan">{employee.account}</Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        {employee.department ? (
+                          <span className="text-gray-600">{employee.department}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        {employee.position ? (
+                          <span className="text-gray-600 text-sm">{employee.position}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="text-gray-500 text-sm">{employee.manager_name || '-'}</span>
+                      </td>
+                      {isAdmin && (
+                        <td className="py-4 px-6">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setEditingEmployee(employee)}
+                              className="p-2 rounded-lg hover:bg-orange-50 text-gray-500 hover:text-[#F7941D] transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Are you sure you want to delete this employee?')) {
+                                  deleteMutation.mutate(employee.id)
+                                }
+                              }}
+                              className="p-2 rounded-lg hover:bg-rose-50 text-gray-500 hover:text-rose-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="border-t border-gray-100 p-4">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                  pageSizeOptions={[25, 50, 100, 200]}
+                />
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -517,4 +666,3 @@ function EmployeeModal({ isOpen, onClose, employee, onSubmit, loading }) {
     </Modal>
   )
 }
-
