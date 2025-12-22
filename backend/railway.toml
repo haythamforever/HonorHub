@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [build.nixpacks]
-installCmds = ["npm ci"]
+installCmds = ["npm install"]
 
 [deploy]
 startCommand = "npm start"
