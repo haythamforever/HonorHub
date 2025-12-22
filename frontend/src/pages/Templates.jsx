@@ -7,7 +7,7 @@ import {
   Check,
   Star
 } from 'lucide-react'
-import { templatesAPI, settingsAPI } from '../services/api'
+import { templatesAPI, settingsAPI, getUploadUrl } from '../services/api'
 import { PageHeader, Card, Badge, Spinner } from '../components/UI'
 import toast from 'react-hot-toast'
 
@@ -168,7 +168,7 @@ export default function Templates() {
     queryFn: () => settingsAPI.getAll().then(r => r.data),
   })
 
-  const companyLogo = settings?.company_logo
+  const companyLogo = getUploadUrl(settings?.company_logo)
 
   const setDefaultMutation = useMutation({
     mutationFn: ({ id }) => templatesAPI.update(id, { is_default: true }),

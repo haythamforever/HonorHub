@@ -1,8 +1,32 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
+// Get the API URL (includes /api suffix)
+const apiUrl = import.meta.env.VITE_API_URL || '/api'
+
+// Get the backend base URL (without /api) for serving static files
+export const getBackendUrl = () => {
+  const url = import.meta.env.VITE_API_URL || ''
+  // Remove /api suffix if present
+  return url.replace(/\/api\/?$/, '')
+}
+
+// Helper to get full URL for uploaded files (images, pdfs, etc.)
+export const getUploadUrl = (path) => {
+  if (!path) return ''
+  // If path is already a full URL, return it
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path
+  }
+  // Otherwise prepend the backend URL
+  const backendUrl = getBackendUrl()
+  // Ensure path starts with /
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return backendUrl ? `${backendUrl}${normalizedPath}` : normalizedPath
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },

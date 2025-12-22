@@ -16,7 +16,7 @@ import {
   Image,
   Pen
 } from 'lucide-react'
-import { settingsAPI, uploadAPI } from '../services/api'
+import { settingsAPI, uploadAPI, getUploadUrl } from '../services/api'
 import { PageHeader, Card, Button, Input, Textarea, Spinner } from '../components/UI'
 import { useAuthStore } from '../store/authStore'
 import toast from 'react-hot-toast'
@@ -166,7 +166,7 @@ export default function Settings() {
             {settings.company_logo ? (
               <div className="relative aspect-video rounded-xl bg-gray-50 overflow-hidden border border-gray-200 flex items-center justify-center">
                 <img 
-                  src={settings.company_logo} 
+                  src={getUploadUrl(settings.company_logo)} 
                   alt="Company Logo" 
                   className="max-h-full max-w-full object-contain p-4"
                 />

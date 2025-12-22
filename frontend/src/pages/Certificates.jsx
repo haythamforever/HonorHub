@@ -15,7 +15,7 @@ import {
   XCircle,
   Clock
 } from 'lucide-react'
-import { certificatesAPI, tiersAPI } from '../services/api'
+import { certificatesAPI, tiersAPI, getUploadUrl } from '../services/api'
 import { PageHeader, Card, Button, Modal, EmptyState, Badge, Spinner, Select, Pagination } from '../components/UI'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -223,7 +223,7 @@ export default function Certificates() {
                           </button>
                           {cert.pdf_path && (
                             <a
-                              href={cert.pdf_path}
+                              href={getUploadUrl(cert.pdf_path)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
@@ -378,7 +378,7 @@ export default function Certificates() {
             {/* Actions */}
             <div className="flex justify-end gap-3">
               {viewingCert.pdf_path && (
-                <a href={viewingCert.pdf_path} target="_blank" rel="noopener noreferrer">
+                <a href={getUploadUrl(viewingCert.pdf_path)} target="_blank" rel="noopener noreferrer">
                   <Button variant="secondary">
                     <Download className="w-4 h-4" />
                     Download PDF

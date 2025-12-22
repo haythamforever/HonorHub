@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { settingsAPI } from '../services/api'
+import { settingsAPI, getUploadUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 
 // Integrant Brand Colors
@@ -25,7 +25,7 @@ export default function CertificatePreview({
 
   const signatureName = user?.signature_name || settings?.global_signature_name || 'Signatory Name'
   const signatureTitle = user?.signature_title || settings?.global_signature_title || 'Title'
-  const companyLogo = settings?.company_logo
+  const companyLogo = getUploadUrl(settings?.company_logo)
 
   return (
     <div 
@@ -129,7 +129,7 @@ export function CertificatePreviewLarge({
 
   const signatureName = user?.signature_name || settings?.global_signature_name || 'Signatory Name'
   const signatureTitle = user?.signature_title || settings?.global_signature_title || 'Title'
-  const companyLogo = settings?.company_logo
+  const companyLogo = getUploadUrl(settings?.company_logo)
 
   return (
     <div 

@@ -13,7 +13,7 @@ import {
   Trash2,
   FileSignature
 } from 'lucide-react'
-import { settingsAPI } from '../services/api'
+import { settingsAPI, getUploadUrl } from '../services/api'
 import { usersAPI, uploadAPI, authAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { PageHeader, Card, Button, Input, Spinner } from '../components/UI'
@@ -196,7 +196,7 @@ export default function Profile() {
             {user?.logo_path ? (
               <div className="relative aspect-video rounded-xl bg-gray-50 overflow-hidden border border-gray-200">
                 <img 
-                  src={user.logo_path} 
+                  src={getUploadUrl(user.logo_path)} 
                   alt="Logo" 
                   className="w-full h-full object-contain p-4"
                 />
@@ -253,7 +253,7 @@ export default function Profile() {
             {user?.signature_path ? (
               <div className="relative aspect-video rounded-xl bg-gray-50 overflow-hidden border border-gray-200">
                 <img 
-                  src={user.signature_path} 
+                  src={getUploadUrl(user.signature_path)} 
                   alt="Signature" 
                   className="w-full h-full object-contain p-4"
                 />
