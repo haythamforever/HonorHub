@@ -15,7 +15,8 @@ import {
   Trash2,
   Image,
   Pen,
-  Zap
+  Zap,
+  Flame
 } from 'lucide-react'
 import { settingsAPI, uploadAPI, getUploadUrl } from '../services/api'
 import { PageHeader, Card, Button, Input, Textarea, Spinner } from '../components/UI'
@@ -87,6 +88,14 @@ export default function Settings() {
   }
 
   const emailProvider = settings.email_provider || 'smtp'
+  
+  const getProviderLabel = () => {
+    switch (emailProvider) {
+      case 'resend': return 'Resend'
+      case 'mailgun': return 'Mailgun'
+      default: return 'SMTP'
+    }
+  }
 
   if (user?.role !== 'admin') {
     return (
@@ -261,7 +270,8 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* SMTP Option */}
             <button
               onClick={() => handleChange('email_provider', 'smtp')}
               className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -276,19 +286,20 @@ export default function Settings() {
                 }`}>
                   <Server className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-800">SMTP</p>
-                  <p className="text-xs text-gray-500">Traditional email server</p>
+                  <p className="text-xs text-gray-500">Traditional server</p>
                 </div>
                 {emailProvider === 'smtp' && (
-                  <Check className="w-5 h-5 text-[#00B8E6] ml-auto" />
+                  <Check className="w-5 h-5 text-[#00B8E6] flex-shrink-0" />
                 )}
               </div>
               <p className="text-sm text-gray-600">
-                Use your own SMTP server (Gmail, Outlook, custom server)
+                Your own SMTP server
               </p>
             </button>
 
+            {/* Resend Option */}
             <button
               onClick={() => handleChange('email_provider', 'resend')}
               className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -303,16 +314,44 @@ export default function Settings() {
                 }`}>
                   <Zap className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-800">Resend</p>
-                  <p className="text-xs text-gray-500">Modern email API</p>
+                  <p className="text-xs text-gray-500">Modern API</p>
                 </div>
                 {emailProvider === 'resend' && (
-                  <Check className="w-5 h-5 text-[#F7941D] ml-auto" />
+                  <Check className="w-5 h-5 text-[#F7941D] flex-shrink-0" />
                 )}
               </div>
               <p className="text-sm text-gray-600">
-                Developer-friendly email API with high deliverability
+                Developer-friendly API
+              </p>
+            </button>
+
+            {/* Mailgun Option */}
+            <button
+              onClick={() => handleChange('email_provider', 'mailgun')}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                emailProvider === 'mailgun'
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  emailProvider === 'mailgun' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800">Mailgun</p>
+                  <p className="text-xs text-gray-500">Email API</p>
+                </div>
+                {emailProvider === 'mailgun' && (
+                  <Check className="w-5 h-5 text-red-500 flex-shrink-0" />
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Powerful email service
               </p>
             </button>
           </div>
@@ -428,6 +467,78 @@ export default function Settings() {
           </Card>
         )}
 
+        {/* Mailgun Settings - Show only when Mailgun is selected */}
+        {emailProvider === 'mailgun' && (
+          <Card className="lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center">
+                <Flame className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-semibold text-gray-800">Mailgun Settings</h2>
+                <p className="text-sm text-gray-500">Configure your Mailgun API credentials</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Mailgun API Key"
+                  type="password"
+                  placeholder="key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={settings.mailgun_api_key || ''}
+                  onChange={(e) => handleChange('mailgun_api_key', e.target.value)}
+                />
+                <Input
+                  label="Mailgun Domain"
+                  placeholder="mg.yourdomain.com"
+                  value={settings.mailgun_domain || ''}
+                  onChange={(e) => handleChange('mailgun_domain', e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  label="From Name"
+                  placeholder="HonorHub"
+                  value={settings.mailgun_from_name || ''}
+                  onChange={(e) => handleChange('mailgun_from_name', e.target.value)}
+                />
+                <Input
+                  label="From Email"
+                  placeholder="noreply@mg.yourdomain.com"
+                  value={settings.mailgun_from_email || ''}
+                  onChange={(e) => handleChange('mailgun_from_email', e.target.value)}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
+                  <select
+                    value={settings.mailgun_region || 'us'}
+                    onChange={(e) => handleChange('mailgun_region', e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                  >
+                    <option value="us">US (api.mailgun.net)</option>
+                    <option value="eu">EU (api.eu.mailgun.net)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+                <p className="text-sm text-red-800">
+                  <strong>Note:</strong> You need to add and verify your domain in the{' '}
+                  <a 
+                    href="https://app.mailgun.com/app/sending/domains" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-red-600 underline hover:text-red-700"
+                  >
+                    Mailgun dashboard
+                  </a>
+                  . The API key can be found in your account settings. Use the sandbox domain for testing.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Email Templates */}
         <Card className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-6">
@@ -479,7 +590,7 @@ export default function Settings() {
             <div>
               <h2 className="text-lg font-display font-semibold text-gray-800">Test Email Configuration</h2>
               <p className="text-sm text-gray-500">
-                Send a test email to verify your {emailProvider === 'resend' ? 'Resend' : 'SMTP'} settings
+                Send a test email to verify your {getProviderLabel()} settings
               </p>
             </div>
           </div>
