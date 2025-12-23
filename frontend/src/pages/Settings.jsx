@@ -14,7 +14,8 @@ import {
   Upload,
   Trash2,
   Image,
-  Pen
+  Pen,
+  Zap
 } from 'lucide-react'
 import { settingsAPI, uploadAPI, getUploadUrl } from '../services/api'
 import { PageHeader, Card, Button, Input, Textarea, Spinner } from '../components/UI'
@@ -84,6 +85,8 @@ export default function Settings() {
   const removeLogo = () => {
     setSettings(prev => ({ ...prev, company_logo: null }))
   }
+
+  const emailProvider = settings.email_provider || 'smtp'
 
   if (user?.role !== 'admin') {
     return (
@@ -246,60 +249,184 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* SMTP Settings */}
+        {/* Email Provider Selection */}
         <Card className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 flex items-center justify-center">
-              <Server className="w-5 h-5 text-cyan-600" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center">
+              <Mail className="w-5 h-5 text-violet-600" />
             </div>
             <div>
-              <h2 className="text-lg font-display font-semibold text-gray-800">SMTP Settings</h2>
-              <p className="text-sm text-gray-500">Email server configuration</p>
+              <h2 className="text-lg font-display font-semibold text-gray-800">Email Provider</h2>
+              <p className="text-sm text-gray-500">Choose how to send emails</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input
-              label="SMTP Host"
-              placeholder="smtp.gmail.com"
-              value={settings.smtp_host || ''}
-              onChange={(e) => handleChange('smtp_host', e.target.value)}
-            />
-            <Input
-              label="SMTP Port"
-              placeholder="587"
-              value={settings.smtp_port || ''}
-              onChange={(e) => handleChange('smtp_port', e.target.value)}
-            />
-            <Input
-              label="SMTP Username"
-              placeholder="your-email@gmail.com"
-              value={settings.smtp_user || ''}
-              onChange={(e) => handleChange('smtp_user', e.target.value)}
-            />
-            <Input
-              label="SMTP Password"
-              type="password"
-              placeholder="App password"
-              value={settings.smtp_pass || ''}
-              onChange={(e) => handleChange('smtp_pass', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <Input
-              label="From Name"
-              placeholder="HonorHub"
-              value={settings.smtp_from_name || ''}
-              onChange={(e) => handleChange('smtp_from_name', e.target.value)}
-            />
-            <Input
-              label="From Email"
-              placeholder="noreply@company.com"
-              value={settings.smtp_from_email || ''}
-              onChange={(e) => handleChange('smtp_from_email', e.target.value)}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => handleChange('email_provider', 'smtp')}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                emailProvider === 'smtp'
+                  ? 'border-[#00B8E6] bg-cyan-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  emailProvider === 'smtp' ? 'bg-[#00B8E6] text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-800">SMTP</p>
+                  <p className="text-xs text-gray-500">Traditional email server</p>
+                </div>
+                {emailProvider === 'smtp' && (
+                  <Check className="w-5 h-5 text-[#00B8E6] ml-auto" />
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Use your own SMTP server (Gmail, Outlook, custom server)
+              </p>
+            </button>
+
+            <button
+              onClick={() => handleChange('email_provider', 'resend')}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                emailProvider === 'resend'
+                  ? 'border-[#F7941D] bg-orange-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  emailProvider === 'resend' ? 'bg-[#F7941D] text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-800">Resend</p>
+                  <p className="text-xs text-gray-500">Modern email API</p>
+                </div>
+                {emailProvider === 'resend' && (
+                  <Check className="w-5 h-5 text-[#F7941D] ml-auto" />
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Developer-friendly email API with high deliverability
+              </p>
+            </button>
           </div>
         </Card>
+
+        {/* SMTP Settings - Show only when SMTP is selected */}
+        {emailProvider === 'smtp' && (
+          <Card className="lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-100 to-blue-100 flex items-center justify-center">
+                <Server className="w-5 h-5 text-cyan-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-semibold text-gray-800">SMTP Settings</h2>
+                <p className="text-sm text-gray-500">Email server configuration</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Input
+                label="SMTP Host"
+                placeholder="smtp.gmail.com"
+                value={settings.smtp_host || ''}
+                onChange={(e) => handleChange('smtp_host', e.target.value)}
+              />
+              <Input
+                label="SMTP Port"
+                placeholder="587"
+                value={settings.smtp_port || ''}
+                onChange={(e) => handleChange('smtp_port', e.target.value)}
+              />
+              <Input
+                label="SMTP Username"
+                placeholder="your-email@gmail.com"
+                value={settings.smtp_user || ''}
+                onChange={(e) => handleChange('smtp_user', e.target.value)}
+              />
+              <Input
+                label="SMTP Password"
+                type="password"
+                placeholder="App password"
+                value={settings.smtp_pass || ''}
+                onChange={(e) => handleChange('smtp_pass', e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Input
+                label="From Name"
+                placeholder="HonorHub"
+                value={settings.smtp_from_name || ''}
+                onChange={(e) => handleChange('smtp_from_name', e.target.value)}
+              />
+              <Input
+                label="From Email"
+                placeholder="noreply@company.com"
+                value={settings.smtp_from_email || ''}
+                onChange={(e) => handleChange('smtp_from_email', e.target.value)}
+              />
+            </div>
+          </Card>
+        )}
+
+        {/* Resend Settings - Show only when Resend is selected */}
+        {emailProvider === 'resend' && (
+          <Card className="lg:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-display font-semibold text-gray-800">Resend Settings</h2>
+                <p className="text-sm text-gray-500">Configure your Resend API credentials</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Input
+                label="Resend API Key"
+                type="password"
+                placeholder="re_xxxxxxxxxx"
+                value={settings.resend_api_key || ''}
+                onChange={(e) => handleChange('resend_api_key', e.target.value)}
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="From Name"
+                  placeholder="HonorHub"
+                  value={settings.resend_from_name || ''}
+                  onChange={(e) => handleChange('resend_from_name', e.target.value)}
+                />
+                <Input
+                  label="From Email"
+                  placeholder="noreply@yourdomain.com"
+                  value={settings.resend_from_email || ''}
+                  onChange={(e) => handleChange('resend_from_email', e.target.value)}
+                />
+              </div>
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  <strong>Note:</strong> To use a custom "from" email domain, you need to verify it in your{' '}
+                  <a 
+                    href="https://resend.com/domains" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-amber-600 underline hover:text-amber-700"
+                  >
+                    Resend dashboard
+                  </a>
+                  . Otherwise, use <code className="bg-amber-100 px-1 rounded">onboarding@resend.dev</code> for testing.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Email Templates */}
         <Card className="lg:col-span-2">
@@ -347,11 +474,13 @@ export default function Settings() {
         <Card className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-violet-600" />
+              <Send className="w-5 h-5 text-violet-600" />
             </div>
             <div>
               <h2 className="text-lg font-display font-semibold text-gray-800">Test Email Configuration</h2>
-              <p className="text-sm text-gray-500">Send a test email to verify your SMTP settings</p>
+              <p className="text-sm text-gray-500">
+                Send a test email to verify your {emailProvider === 'resend' ? 'Resend' : 'SMTP'} settings
+              </p>
             </div>
           </div>
 

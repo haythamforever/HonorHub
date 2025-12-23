@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const path = require('path');
 const fs = require('fs');
 const { getAll } = require('../database/init');
@@ -12,11 +13,9 @@ async function getEmailSettings() {
   return settingsObj;
 }
 
-async function createTransporter() {
-  const settings = await getEmailSettings();
-  
+async function createSmtpTransporter(settings) {
   if (!settings.smtp_host || !settings.smtp_user) {
-    throw new Error('Email settings not configured');
+    throw new Error('SMTP settings not configured');
   }
   
   return nodemailer.createTransport({
@@ -30,11 +29,60 @@ async function createTransporter() {
   });
 }
 
+function createResendClient(settings) {
+  if (!settings.resend_api_key) {
+    throw new Error('Resend API key not configured');
+  }
+  return new Resend(settings.resend_api_key);
+}
+
+async function sendWithSmtp(mailOptions, settings) {
+  const transporter = await createSmtpTransporter(settings);
+  return transporter.sendMail(mailOptions);
+}
+
+async function sendWithResend(mailOptions, settings) {
+  const resend = createResendClient(settings);
+  
+  const emailData = {
+    from: mailOptions.from,
+    to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+    subject: mailOptions.subject,
+    text: mailOptions.text,
+    html: mailOptions.html
+  };
+  
+  // Handle attachments for Resend
+  if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+    emailData.attachments = mailOptions.attachments.map(att => ({
+      filename: att.filename,
+      content: fs.readFileSync(att.path).toString('base64')
+    }));
+  }
+  
+  const result = await resend.emails.send(emailData);
+  
+  if (result.error) {
+    throw new Error(result.error.message || 'Failed to send email via Resend');
+  }
+  
+  return result;
+}
+
+async function sendEmail(mailOptions, settings) {
+  const provider = settings.email_provider || 'smtp';
+  
+  if (provider === 'resend') {
+    return sendWithResend(mailOptions, settings);
+  } else {
+    return sendWithSmtp(mailOptions, settings);
+  }
+}
+
 async function sendCertificateEmail(options) {
   const { employee, tier, sender, customMessage, pdfPath } = options;
   
   const settings = await getEmailSettings();
-  const transporter = await createTransporter();
   
   // Replace placeholders in subject and body templates
   let subject = settings.email_subject_template || 'Congratulations! You have been recognized as {tier}';
@@ -56,8 +104,12 @@ async function sendCertificateEmail(options) {
   // Handle escaped newlines in stored template
   body = body.replace(/\\n/g, '\n');
   
+  // Determine from address based on provider
+  const fromName = settings.smtp_from_name || settings.resend_from_name || 'HonorHub';
+  const fromEmail = settings.smtp_from_email || settings.resend_from_email || settings.smtp_user || 'onboarding@resend.dev';
+  
   const mailOptions = {
-    from: `"${settings.smtp_from_name || 'HonorHub'}" <${settings.smtp_from_email || settings.smtp_user}>`,
+    from: `${fromName} <${fromEmail}>`,
     to: employee.email,
     subject,
     text: body,
@@ -78,22 +130,25 @@ async function sendCertificateEmail(options) {
     }
   }
   
-  return transporter.sendMail(mailOptions);
+  return sendEmail(mailOptions, settings);
 }
 
 async function sendTestEmail(testEmail) {
   const settings = await getEmailSettings();
-  const transporter = await createTransporter();
+  
+  const provider = settings.email_provider || 'smtp';
+  const fromName = settings.smtp_from_name || settings.resend_from_name || 'HonorHub';
+  const fromEmail = settings.smtp_from_email || settings.resend_from_email || settings.smtp_user || 'onboarding@resend.dev';
   
   const mailOptions = {
-    from: `"${settings.smtp_from_name || 'HonorHub'}" <${settings.smtp_from_email || settings.smtp_user}>`,
+    from: `${fromName} <${fromEmail}>`,
     to: testEmail,
     subject: 'HonorHub - Test Email',
-    text: 'This is a test email from HonorHub. If you received this, your email configuration is working correctly!',
+    text: `This is a test email from HonorHub using ${provider.toUpperCase()}. If you received this, your email configuration is working correctly!`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h2 style="color: #4F46E5;">🎉 HonorHub Test Email</h2>
-        <p>This is a test email from HonorHub.</p>
+        <p>This is a test email from HonorHub using <strong>${provider.toUpperCase()}</strong>.</p>
         <p>If you received this, your email configuration is working correctly!</p>
         <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 20px 0;">
         <p style="color: #6B7280; font-size: 12px;">
@@ -103,7 +158,7 @@ async function sendTestEmail(testEmail) {
     `
   };
   
-  return transporter.sendMail(mailOptions);
+  return sendEmail(mailOptions, settings);
 }
 
 module.exports = { sendCertificateEmail, sendTestEmail };
