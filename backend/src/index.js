@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -30,8 +32,8 @@ uploadDirs.forEach(dir => {
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: '*',
+  credentials: false
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -64,7 +66,23 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!', message: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`🏆 HonorHub API running on port ${PORT}`);
-});
+const USE_HTTPS = process.env.USE_HTTPS === 'true';
+
+if (USE_HTTPS) {
+  const certPath = process.env.CERT_PATH || path.join(__dirname, '..', 'cert.crt');
+  const keyPath = process.env.KEY_PATH || path.join(__dirname, '..', 'cert.key');
+  
+  const sslOptions = {
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath)
+  };
+  
+  https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`🏆 HonorHub API running on HTTPS port ${PORT}`);
+  });
+} else {
+  http.createServer(app).listen(PORT, () => {
+    console.log(`🏆 HonorHub API running on HTTP port ${PORT}`);
+  });
+}
 
